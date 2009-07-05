@@ -9,6 +9,7 @@ my $opt = {
     PREREQ_PM           =>  {
         'Test::More'        =>  '0',
         'Test::Harness'     =>  '3.04',
+#       'Encode'            =>  '2.23', # recommended
         'Encode::JP::Emoji' =>  '0.03',
     },
 };
