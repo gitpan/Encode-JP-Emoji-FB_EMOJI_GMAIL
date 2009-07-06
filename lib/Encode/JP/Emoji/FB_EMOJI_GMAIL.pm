@@ -11,22 +11,22 @@ Encode::JP::Emoji::FB_EMOJI_GMAIL - Emoji fallback functions with Gmail
     use Encode::JP::Emoji::FB_EMOJI_GMAIL;
 
     # DoCoMo Shift_JIS <SJIS+F89F> octets
-    # <img src="http://mail.google.com/mail/e/docomo_ne_jp/000" class="e" />
+    # <img src="http://mail.google.com/mail/e/docomo_ne_jp/000" alt="[晴れ]" class="e" />
     my $sun = "\xF8\x9F";
     Encode::from_to($sun, 'x-sjis-emoji-docomo', 'x-sjis-emoji-none', FB_EMOJI_GMAIL());
 
     # KDDI(web) Shift_JIS <SJIS+F665> octets
-    # <img src="http://mail.google.com/mail/e/ezweb_ne_jp/001" class="e" />
+    # <img src="http://mail.google.com/mail/e/ezweb_ne_jp/001" alt="[曇り]" class="e" />
     my $cloud = "\xF6\x65";
     Encode::from_to($cloud, 'x-sjis-emoji-kddiweb', 'x-sjis-emoji-none', FB_EMOJI_GMAIL());
 
     # SoftBank UTF-8 <U+E524> string
-    # <img src="http://mail.google.com/mail/e/softbank_ne_jp/1CA" class="e" />
+    # <img src="http://mail.google.com/mail/e/softbank_ne_jp/1CA" alt="[ハムスター]" class="e" />
     my $hamster = "\x{E524}";
     $hamster = Encode::encode('x-sjis-e4u-none', $hamster, FB_EMOJI_GMAIL());
 
     # Google UTF-8 <U+FE1C1> octets
-    # <img src="http://mail.google.com/mail/e/1C1" class="e" />
+    # <img src="http://mail.google.com/mail/e/1C1" alt="[クマ]" class="e" />
     my $bear = "\xF3\xBE\x87\x81";
     $bear = Encode::decode('x-utf8-e4u-none', $bear, FB_EMOJI_GMAIL());
 
@@ -41,6 +41,8 @@ Note that this is B<NOT> an official service powered by Gmail.
 
 This returns C<img> element for PC to display emoji images.
 Having conflicts with SoftBank encoding, KDDI(app) encoding is B<NOT> recommended.
+
+=head2 FB_EMOJI_GMAIL()
 
 =head1 LINKS
 
@@ -99,27 +101,30 @@ use base 'Exporter';
 use Encode ();
 use Encode::JP::Emoji;
 use Encode::JP::Emoji::Property;
+use Encode::JP::Emoji::FB_EMOJI_TEXT;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 our @EXPORT = qw(
     FB_EMOJI_GMAIL
 );
 
-our $DOCOMO_FORMAT   = '<img src="http://mail.google.com/mail/e/docomo_ne_jp/%03X" class="e" />';
-our $KDDI_FORMAT     = '<img src="http://mail.google.com/mail/e/ezweb_ne_jp/%03X" class="e" />';
-our $SOFTBANK_FORMAT = '<img src="http://mail.google.com/mail/e/softbank_ne_jp/%03X" class="e" />';
-our $GOOGLE_FORMAT   = '<img src="http://mail.google.com/mail/e/%03X" class="e" />';
+our $DOCOMO_FORMAT   = '<img src="http://mail.google.com/mail/e/docomo_ne_jp/%03X" alt="%s" class="e" />';
+our $KDDI_FORMAT     = '<img src="http://mail.google.com/mail/e/ezweb_ne_jp/%03X" alt="%s" class="e" />';
+our $SOFTBANK_FORMAT = '<img src="http://mail.google.com/mail/e/softbank_ne_jp/%03X" alt="%s" class="e" />';
+our $GOOGLE_FORMAT   = '<img src="http://mail.google.com/mail/e/%03X" alt="%s" class="e" />';
 
-my $latin1 = Encode::find_encoding('latin1');
+my $ascii  = Encode::find_encoding('us-ascii');
 my $utf8   = Encode::find_encoding('utf8');
 my $mixed  = Encode::find_encoding('x-utf8-e4u-mixed');
+my $none   = Encode::find_encoding('x-utf8-e4u-none');
+my $fbtext = FB_EMOJI_TEXT();
 
 sub FB_EMOJI_GMAIL {
-    my $fb = shift || Encode::FB_XMLCREF();
+    my $fb = shift || $fbtext;
     sub {
-        my $code = shift;
-        my $chr  = chr $code;
+        my $code   = shift;
+        my $chr    = chr $code;
         my $format = $GOOGLE_FORMAT;
         my $gcode;
         if ($chr =~ /\p{InEmojiGoogle}/) {
@@ -127,25 +132,30 @@ sub FB_EMOJI_GMAIL {
             $gcode = $code;
         } elsif ($chr =~ /\p{InEmojiAny}/) {
             # others emoji
-            my $gchr = $mixed->decode($utf8->encode($chr));
-            if (1 == length $gchr) {
-                $gcode = ord $gchr;
-                if ($chr =~ /\p{InEmojiDoCoMo}/) {
-                    $format = $DOCOMO_FORMAT;
-                } elsif ($chr =~ /\p{InEmojiSoftBank}/) {
-                    $format = $SOFTBANK_FORMAT;
-                } elsif ($chr =~ /\p{InEmojiKDDIweb}/) {
-                    $format = $KDDI_FORMAT;
-                } elsif ($chr =~ /\p{InEmojiKDDIapp}/) {
-                    $format = $KDDI_FORMAT;
-                }
+            if ($chr =~ /\p{InEmojiDoCoMo}/) {
+                $format = $DOCOMO_FORMAT;
+            } elsif ($chr =~ /\p{InEmojiSoftBank}/) {
+                $format = $SOFTBANK_FORMAT;
+            } elsif ($chr =~ /\p{InEmojiKDDIweb}/) {
+                $format = $KDDI_FORMAT;
+            } elsif ($chr =~ /\p{InEmojiKDDIapp}/) {
+                $format = $KDDI_FORMAT;
             }
+            my $moct = $utf8->encode(chr $code, $fb);   # Mixed UTF-8 octets
+            my $gstr = $mixed->decode($moct, $fb);      # Google UTF-8 string
+            $gcode = ord $gstr if (1 == length $gstr);
         }
         unless (defined $gcode) {
-            return $latin1->encode($chr, $fb);
+            my $aoct = $ascii->encode(chr $code, $fb);  # force fallback
+            return $utf8->decode($aoct, $fb);           # UTF-8 string
         }
-        sprintf $format => ($gcode & 0x0FFF);
+        my $num = $gcode & 0x0FFF;
+        my $name = $none->encode(chr $code, $fbtext);   # emoji name
+        $name = $utf8->decode($name, $fb);              # UTF-8 string
+        sprintf $format => $num, $name;
     };
 }
+
+# Ｔｈｉｓ　ｆｉｌｅ　ｗａｓ　ｗｒｉｔｔｅｎ　ｉｎ　ＵＴＦ－８
 
 1;
